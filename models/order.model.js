@@ -14,4 +14,22 @@ const orderSchema = new mongoose.Schema({
   dateCommande: { type: Date, default: Date.now },
 }, { timestamps: true });
 
+
+// Middleware pour calculer le total automatiquement avant enregistrement
+orderSchema.pre('save', async function(next) {
+  if (this.produits && this.produits.length > 0) {
+    let total = 0;
+    for (const item of this.produits) {
+      // Récupère le prix du produit depuis la DB
+      const Produit = mongoose.model('Product');
+      const produitDoc = await Produit.findById(item.produit);
+      if (produitDoc) total += produitDoc.prix * item.quantite;
+    }
+    this.montantTotal = total;
+  }
+  next();
+});
+
+
+
 export default mongoose.model('Order', orderSchema);

@@ -5,6 +5,10 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import connectDB from './config/database.js';
+import path from "path";
+import { fileURLToPath } from "url";
+
+
 
 // Routes
 import authRoutes from './routes/auth.routes.js';
@@ -28,6 +32,10 @@ const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
 app.use(limiter);
 
 await connectDB();
+// 📂 Rendre le dossier uploads accessible
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -44,3 +52,5 @@ app.use(errorMiddleware);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`✅ Serveur (ESM) sur http://localhost:${PORT}`));
+//app.listen(PORT, () => console.log("✅ serveur lancé sur https://electro-pro-guinee.onrender.com"));
+

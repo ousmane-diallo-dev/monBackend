@@ -1,7 +1,7 @@
 import User from '../models/user.model.js';
 import bcrypt from 'bcrypt';
 import { updateProfileSchema } from '../validators/user.validator.js';
-
+import multer from 'multer';
 
 export const listUsers = async (req, res, next) => {
   try {
@@ -48,6 +48,28 @@ export const updateMe = async (req, res, next) => {
     next(e);
   }
 };
+
+// ✅ Upload / mise à jour photo de profil
+export const uploadPhoto = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Aucune image envoyée" });
+    }
+
+    const user = await User.findById(req.user.id).select("-motDePasse");
+    if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+
+    // 🔹 si tu stockes en local
+    user.photo = `/uploads/${req.file.filename}`;
+    await user.save();
+
+    res.status(200).json({ message: "Photo de profil mise à jour", photo: user.photo });
+  } catch (e) {
+    next(e);
+  }
+};
+
+
 export const deleteMe = async (req, res, next) => {
   try {
     const user = await User.findByIdAndDelete(req.user.id);

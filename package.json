@@ -1,7 +1,7 @@
 {
   "name": "electropro-backend-esm",
   "version": "1.0.0",
-  "description": "ElectroPro Guin\u00e9e backend (ESM) - Node.js, Express, MongoDB, Joi, JWT, pagination & sort",
+  "description": "ElectroPro Guinée backend (ESM) - Node.js, Express, MongoDB, Joi, JWT, pagination & sort",
   "type": "module",
   "main": "server.js",
   "scripts": {
@@ -19,6 +19,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.5.1",
     "morgan": "^1.10.0",
+    "multer": "^2.0.2",
     "nodemailer": "^6.9.13"
   },
   "devDependencies": {
