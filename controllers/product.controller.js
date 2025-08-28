@@ -2,7 +2,14 @@ import Product from '../models/product.model.js';
 
 export const create = async (req, res, next) => {
   try {
-    const produit = new Product(req.body);
+    let images = req.body.images || [];
+    if (req.files && req.files.length > 0) {
+      images = req.files.map(f => `/uploads/${f.filename}`);
+    }
+    const produit = new Product({
+      ...req.body,
+      images
+    });
     await produit.save();
     res.status(201).json(produit);
   } catch (e) { next(e); }
@@ -33,7 +40,24 @@ export const getOne = async (req, res, next) => {
 
 export const update = async (req, res, next) => {
   try {
-    const produit = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updates = { ...req.body };
+
+    // Si des fichiers images sont envoyés, remplacer le champ images par les nouveaux chemins
+    if (req.files && req.files.length > 0) {
+      updates.images = req.files.map(f => `/uploads/${f.filename}`);
+    } else {
+      // Si aucune image n'est fournie dans la requête, ne pas écraser les images existantes
+      if (typeof updates.images === 'undefined') {
+        delete updates.images;
+      }
+    }
+
+    const produit = await Product.findByIdAndUpdate(
+      req.params.id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+
     if (!produit) return res.status(404).json({ message: 'Produit non trouvé' });
     res.json(produit);
   } catch (e) { next(e); }

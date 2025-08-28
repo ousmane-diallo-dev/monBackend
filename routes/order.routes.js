@@ -13,5 +13,6 @@ router.post('/', validate(createOrderSchema), ctrl.create);
 router.get('/', ctrl.list);
 router.get('/:id', ctrl.getOne);
 router.put('/:id/status', allow('admin'), validate(statusSchema), ctrl.updateStatus);
+router.post('/:id/cancel', ctrl.cancelMyOrder);
 
 export default router;

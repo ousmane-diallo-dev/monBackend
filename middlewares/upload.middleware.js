@@ -18,7 +18,7 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     // Nom unique → userId_timestamp.extension
     const ext = path.extname(file.originalname);
-    cb(null, `${req.user.id}_${Date.now()}${ext}`);
+  cb(null, `${req.user ? req.user.id : 'nouveau'}_${Date.now()}${ext}`);
   },
 });
 
@@ -33,7 +33,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 // Limite taille : 2 Mo max
-const limits = { fileSize: 2 * 1024 * 1024 };
+const limits = { fileSize: 5 * 1024 * 1024 };
 
 const upload = multer({ storage, fileFilter, limits });
 

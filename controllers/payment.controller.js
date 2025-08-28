@@ -5,11 +5,16 @@ export const create = async (req, res, next) => {
   try {
     const { commande, montant, methode } = req.body;
 
+    // Validation des champs obligatoires
+    if (!commande || !montant || !methode) {
+      return res.status(400).json({ message: 'commande, montant et methode sont requis' });
+    }
+
     const order = await Order.findById(commande);
     if (!order) return res.status(404).json({ message: 'Commande non trouvée' });
 
     // Vérif droit : admin ou propriétaire
-    if (req.user.role !== 'admin' && order.client.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin' && order.client.toString() !== req.user.id) {
       return res.status(403).json({ message: 'Accès refusé' });
     }
 
@@ -34,7 +39,7 @@ export const list = async (req, res, next) => {
 
     let filter = {};
     if (req.user.role !== 'admin') {
-      const orders = await Order.find({ client: req.user._id }).select('_id');
+      const orders = await Order.find({ client: req.user.id }).select('_id');
       filter = { commande: { $in: orders.map(o => o._id) } };
     }
 
@@ -81,6 +86,7 @@ export const updateStatus = async (req, res, next) => {
     next(e);
   }
 };
+
 export const getPaymentById = async (req, res, next) => {
   try {
     const payment = await Payment.findById(req.params.id)
@@ -89,7 +95,7 @@ export const getPaymentById = async (req, res, next) => {
     if (!payment) return res.status(404).json({ message: 'Paiement non trouvé' });
 
     // Vérif droit : admin ou propriétaire
-    if (req.user.role !== 'admin' && payment.commande.client.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin' && payment.commande.client.toString() !== req.user.id) {
       return res.status(403).json({ message: 'Accès refusé' });
     }
 
@@ -98,6 +104,7 @@ export const getPaymentById = async (req, res, next) => {
     next(e);
   }
 };
+
 export const deletePayment = async (req, res, next) => {
   try {
     if (req.user.role !== 'admin') {
@@ -111,7 +118,8 @@ export const deletePayment = async (req, res, next) => {
   } catch (e) {
     next(e);
   }
-}
+};
+
 export const getPaymentByOrderId = async (req, res, next) => {
   try {
     const payment = await Payment.findOne({ commande: req.params.orderId })
@@ -128,7 +136,8 @@ export const getPaymentByOrderId = async (req, res, next) => {
   } catch (e) {
     next(e);
   }
-}
+};
+
 export const getPaymentsByClientId = async (req, res, next) => {
   try {
     const payments = await Payment.find({ 'commande.client': req.params.clientId })
@@ -137,7 +146,7 @@ export const getPaymentsByClientId = async (req, res, next) => {
     if (payments.length === 0) return res.status(404).json({ message: 'Aucun paiement trouvé pour ce client' });
 
     // Vérif droit : admin ou propriétaire
-    if (req.user.role !== 'admin' && payments[0].commande.client.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin' && payments[0].commande.client.toString() !== req.user.id) {
       return res.status(403).json({ message: 'Accès refusé' });
     }
 
@@ -145,7 +154,8 @@ export const getPaymentsByClientId = async (req, res, next) => {
   } catch (e) {
     next(e);
   }
-}
+};
+
 export const getPaymentsByStatus = async (req, res, next) => {
   try {
     const { statut } = req.params;
@@ -154,20 +164,20 @@ export const getPaymentsByStatus = async (req, res, next) => {
       return res.status(400).json({ message: 'Statut invalide' });
     }
 
-    const payments = await Payment.find({ statut })
+    let payments = await Payment.find({ statut })
       .populate({ path: 'commande', populate: { path: 'client', select: 'nom prenom email' } });
 
     if (payments.length === 0) return res.status(404).json({ message: 'Aucun paiement trouvé pour ce statut' });
 
     // Vérif droit : admin ou propriétaire
     if (req.user.role !== 'admin') {
-      const orders = await Order.find({ client: req.user._id }).select('_id');
-      const orderIds = orders.map(o => o._id);
-      payments = payments.filter(p => orderIds.includes(p.commande._id));
+      const orders = await Order.find({ client: req.user.id }).select('_id');
+      const orderIds = orders.map(o => o._id.toString());
+      payments = payments.filter(p => orderIds.includes(p.commande._id.toString()));
     }
 
     res.json(payments);
   } catch (e) {
     next(e);
   }
-}
+};
