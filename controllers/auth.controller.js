@@ -7,6 +7,13 @@ export const register = async (req, res, next) => {
   try {
     const { nom, prenom, email, motDePasse, role } = req.body;
     
+    // Validation des champs requis
+    if (!nom || !email || !motDePasse) {
+      return res.status(400).json({ 
+        message: 'Les champs nom, email et mot de passe sont requis' 
+      });
+    }
+
     // Vérifier si l'email existe déjà
     const exists = await User.findOne({ email: email.toLowerCase() });
     if (exists) {
@@ -36,11 +43,11 @@ export const register = async (req, res, next) => {
     // Générer le token JWT
     const token = signToken(user);
 
-    // Retourner la réponse
+    // Retourner la réponse avec _id au lieu de id
     res.status(201).json({ 
       token, 
       user: { 
-        id: user._id, 
+        _id: user._id, 
         nom: user.nom, 
         prenom: user.prenom, 
         email: user.email, 
@@ -56,7 +63,7 @@ export const register = async (req, res, next) => {
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({ 
-        message: 'Données invalides', 
+        message: 'Données de validation invalides: ' + validationErrors.join(', '), 
         errors: validationErrors 
       });
     }
@@ -68,7 +75,10 @@ export const register = async (req, res, next) => {
       });
     }
 
-    next(error);
+    // Gestion des erreurs génériques avec plus de détails
+    res.status(500).json({ 
+      message: 'Erreur serveur lors de l\'inscription: ' + error.message 
+    });
   }
 };
 
@@ -99,7 +109,7 @@ export const login = async (req, res, next) => {
     res.json({ 
       token, 
       user: { 
-        id: user._id, 
+        _id: user._id, 
         nom: user.nom, 
         prenom: user.prenom, 
         email: user.email, 

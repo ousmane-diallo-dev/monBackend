@@ -39,13 +39,11 @@ export const registerSchema = Joi.object({
   motDePasse: Joi.string()
     .min(6)
     .max(128)
-    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
     .required()
     .messages({
       'string.empty': 'Le mot de passe est requis',
       'string.min': 'Le mot de passe doit contenir au moins 6 caractères',
       'string.max': 'Le mot de passe ne peut pas dépasser 128 caractères',
-      'string.pattern.base': 'Le mot de passe doit contenir au moins une lettre minuscule, une lettre majuscule et un chiffre',
       'any.required': 'Le mot de passe est requis'
     }),
   
