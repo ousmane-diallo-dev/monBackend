@@ -9,7 +9,8 @@ import upload from '../middlewares/upload.middleware.js';
 const router = Router();
 
 router.get('/', ctrl.list);
-router.get('/:id', ctrl.getOne);
+router.get('/:id/similar', ctrl.getSimilar);
+router.get('/:id', ctrl.getById);
 
 router.post('/', auth, allow('admin'), upload.array('images', 5), validate(productSchema), ctrl.create);
 router.put('/:id', auth, allow('admin'), upload.array('images', 5), validate(productSchema), ctrl.update);

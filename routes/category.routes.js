@@ -10,8 +10,16 @@ const router = Router();
 router.get('/', ctrl.list);
 router.get('/:id', ctrl.getOne);
 
+
 router.post('/', auth, allow('admin'), validate(categorySchema), ctrl.create);
+
+
+router.post('/many', auth, allow('admin'), ctrl.createMany);
+
+
 router.put('/:id', auth, allow('admin'), validate(categorySchema), ctrl.update);
+
+
 router.delete('/:id', auth, allow('admin'), ctrl.remove);
 
 export default router;
