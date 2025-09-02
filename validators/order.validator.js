@@ -11,5 +11,9 @@ export const createOrderSchema = Joi.object({
 });
 
 export const statusSchema = Joi.object({
-  statut: Joi.string().valid('en attente', 'en cours', 'expédiée', 'livrée', 'annulée').required(),
+  statut: Joi.string().valid('en attente', 'validée', 'rejetée', 'en cours', 'expédiée', 'livrée', 'annulée').required(),
+});
+
+export const rejectOrderSchema = Joi.object({
+  raison: Joi.string().min(5).max(500).required()
 });

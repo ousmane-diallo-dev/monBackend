@@ -27,7 +27,25 @@ const app = express();
 
 // Helmet (désactiver CORP pour éviter le blocage NotSameOrigin côté images)
 app.use(helmet({ crossOriginResourcePolicy: false }));
-app.use(cors());
+
+// Configuration CORS pour accepter toutes les origines
+app.use(cors({
+  origin: true, // Accepte toutes les origines
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  maxAge: 86400 // Cache preflight pendant 24h
+}));
+
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 
