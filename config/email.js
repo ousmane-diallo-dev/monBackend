@@ -167,6 +167,91 @@ export const sendPasswordChangedEmail = async (email) => {
   }
 };
 
+// Fonction pour envoyer un email de validation de commande
+export const sendOrderValidatedEmail = async (order, clientEmail, clientName) => {
+  try {
+    const transporter = resolveTransporter();
+
+    const formatPrice = (price) => new Intl.NumberFormat('fr-GN', { 
+      style: 'currency', 
+      currency: 'GNF',
+      minimumFractionDigits: 0 
+    }).format(price);
+
+    const mailOptions = {
+      from: FROM_DEFAULT,
+      to: clientEmail,
+      subject: `✅ Votre commande #${order._id.toString().slice(-8)} a été validée ! - ElectroPro Guinée`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; background-color: #f8f9fa;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            
+            <div style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #16a34a;">
+              <h1 style="color: #16a34a; margin: 0; font-size: 28px;">✅ ElectroPro Guinée</h1>
+              <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 16px;">Commande Validée</p>
+            </div>
+
+            <div style="margin-bottom: 25px;">
+              <p style="color: #374151; line-height: 1.6; margin: 0; font-size: 16px;">
+                Bonjour <strong>${clientName}</strong>,<br><br>
+                Bonne nouvelle ! Votre commande #${order._id.toString().slice(-8)} a été validée par notre équipe et est maintenant en cours de préparation.
+              </p>
+            </div>
+
+            <div style="background-color: #dcfce7; border: 1px solid #86efac; border-radius: 8px; padding: 20px; margin: 25px 0;">
+              <p style="color: #14532d; margin: 0; text-align: center; font-weight: bold; font-size: 16px;">
+                🚀 Votre commande est en préparation !
+              </p>
+              <p style="color: #14532d; margin: 10px 0 0 0; text-align: center; font-size: 14px;">
+                Nous vous enverrons une autre notification dès qu'elle sera expédiée.
+              </p>
+            </div>
+
+            <div style="margin: 30px 0;">
+              <h3 style="color: #1e40af; margin: 0 0 15px 0; font-size: 18px;">📋 Rappel de votre commande</h3>
+              <div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <p style="margin: 5px 0; color: #374151;"><strong>Numéro de commande :</strong> #${order._id.toString().slice(-8)}</p>
+                <p style="margin: 5px 0; color: #374151;"><strong>Montant total :</strong> ${formatPrice(order.montantTotal)}</p>
+                <p style="margin: 5px 0; color: #374151;"><strong>Adresse de livraison :</strong> ${order.adresseLivraison}</p>
+              </div>
+            </div>
+
+            <div style="margin: 30px 0; text-align: center;">
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/orders" 
+                 style="background-color: #1e40af; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                Suivre ma commande
+              </a>
+            </div>
+
+            <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center;">
+              <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+                Merci encore pour votre confiance.<br>
+                © 2024 ElectroPro Guinée. Tous droits réservés.
+              </p>
+            </div>
+          </div>
+        </div>
+      `,
+      text: `ElectroPro Guinée - Commande Validée #${order._id.toString().slice(-8)}\n\n` +
+        `Bonjour ${clientName},\n\n` +
+        `Bonne nouvelle ! Votre commande a été validée et est en cours de préparation.\n\n` +
+        `RAPPEL DE LA COMMANDE :\n` +
+        `- Numéro : #${order._id.toString().slice(-8)}\n` +
+        `- Montant total : ${formatPrice(order.montantTotal)}\n` +
+        `- Adresse de livraison : ${order.adresseLivraison}\n\n` +
+        `Vous pouvez suivre l'état de votre commande sur votre compte client.\n\n` +
+        `© 2024 ElectroPro Guinée. Tous droits réservés.`
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Email de validation de commande envoyé:', info.messageId);
+    return true;
+  } catch (error) {
+    console.error('Erreur lors de l\'envoi de l\'email de validation de commande:', error);
+    return false; // ne pas bloquer le flux
+  }
+};
+
 // Fonction pour envoyer un email de confirmation de commande
 export const sendOrderConfirmationEmail = async (order, clientEmail, clientName) => {
   try {

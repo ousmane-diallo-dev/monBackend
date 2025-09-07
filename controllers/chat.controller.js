@@ -1,6 +1,7 @@
 import ChatMessage from '../models/chatMessage.model.js';
 import User from '../models/user.model.js';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 
 // Fonction pour générer un UUID simple
 const generateUUID = () => {
@@ -10,8 +11,8 @@ const generateUUID = () => {
 // Envoyer un message de chat
 const sendMessage = async (req, res) => {
   try {
-    const { message, userInfo, conversationId, metadata } = req.body;
-    
+    let { message, userInfo, conversationId, metadata } = req.body;
+
     // Générer un ID de conversation si non fourni
     const finalConversationId = conversationId || generateUUID();
     
@@ -22,6 +23,15 @@ const sendMessage = async (req, res) => {
     if (req.user) {
       userId = req.user._id;
       isAuthenticated = true;
+
+      // Si l'utilisateur est authentifié et qu'aucun ID de conversation n'est fourni,
+      // essayer de trouver une conversation existante pour cet utilisateur.
+      if (!conversationId) {
+        const lastMessage = await ChatMessage.findOne({ userId }).sort({ createdAt: -1 });
+        if (lastMessage) {
+          conversationId = lastMessage.conversationId;
+        }
+      }
     }
     
     // Créer le message
@@ -142,35 +152,6 @@ const replyToMessage = async (req, res) => {
   }
 };
 
-// Obtenir toutes les conversations non lues (Admin uniquement)
-const getUnreadConversations = async (req, res) => {
-  try {
-    // Vérifier que l'utilisateur est admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Accès refusé. Seuls les admins peuvent voir les conversations.'
-      });
-    }
-    
-    const conversations = await ChatMessage.getUnreadConversations();
-    
-    res.status(200).json({
-      success: true,
-      data: conversations,
-      count: conversations.length
-    });
-    
-  } catch (error) {
-    console.error('Erreur lors de la récupération des conversations:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la récupération des conversations',
-      error: error.message
-    });
-  }
-};
-
 // Obtenir toutes les conversations (Admin uniquement)
 const getAllConversations = async (req, res) => {
   try {
@@ -182,25 +163,36 @@ const getAllConversations = async (req, res) => {
       });
     }
     
-    const { page = 1, limit = 20, status } = req.query;
-    
-    let matchCondition = { messageType: 'user' };
-    if (status) {
-      matchCondition.status = status;
-    }
+    const { page = 1, limit = 50 } = req.query;
     
     const conversations = await ChatMessage.aggregate([
-      { $match: matchCondition },
+      { $sort: { createdAt: 1 } },
       {
         $group: {
-          _id: '$conversationId',
+          _id: {
+            identifier: { $ifNull: ["$userId", "$conversationId"] },
+            isGuest: { $eq: ["$userId", null] }
+          },
           lastMessage: { $last: '$$ROOT' },
           messageCount: { $sum: 1 },
           unreadCount: {
-            $sum: { $cond: [{ $ne: ['$status', 'read'] }, 1, 0] }
+            $sum: {
+              $cond: [{ $and: [{ $eq: ['$messageType', 'user'] }, { $ne: ['$status', 'read'] }] }, 1, 0]
+            }
           },
           userInfo: { $first: '$userInfo' },
           firstMessageDate: { $first: '$createdAt' }
+        }
+      },
+      {
+        $project: {
+          _id: '$_id.identifier',
+          isGuest: '$_id.isGuest',
+          lastMessage: 1,
+          messageCount: 1,
+          unreadCount: 1,
+          userInfo: 1,
+          firstMessageDate: 1
         }
       },
       { $sort: { 'lastMessage.createdAt': -1 } },
@@ -208,13 +200,20 @@ const getAllConversations = async (req, res) => {
       { $limit: parseInt(limit) }
     ]);
     
+    const totalCountResult = await ChatMessage.aggregate([
+      { $group: { _id: { $ifNull: ["$userId", "$conversationId"] } } },
+      { $count: "total" }
+    ]);
+    const total = totalCountResult[0]?.total || 0;
+
     res.status(200).json({
       success: true,
       data: conversations,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: conversations.length
+        total: total,
+        pages: Math.ceil(total / limit)
       }
     });
     
@@ -231,7 +230,8 @@ const getAllConversations = async (req, res) => {
 // Obtenir l'historique d'une conversation (Admin uniquement)
 const getConversationHistory = async (req, res) => {
   try {
-    const { conversationId } = req.params;
+    const { conversationId: groupId } = req.params;
+    const { isGuest } = req.query;
     
     // Vérifier que l'utilisateur est admin
     if (req.user.role !== 'admin') {
@@ -241,19 +241,22 @@ const getConversationHistory = async (req, res) => {
       });
     }
     
-    const messages = await ChatMessage.getConversationHistory(conversationId);
+    const queryCondition = isGuest === 'true'
+      ? { conversationId: groupId }
+      : { userId: new mongoose.Types.ObjectId(groupId) };
+
+    const messages = await ChatMessage.find(queryCondition).sort({ createdAt: 'asc' });
     
     if (messages.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Conversation non trouvée'
+      return res.status(200).json({
+        success: true,
+        data: [],
       });
     }
     
     res.status(200).json({
       success: true,
       data: messages,
-      conversationId,
       messageCount: messages.length
     });
     
@@ -270,7 +273,8 @@ const getConversationHistory = async (req, res) => {
 // Marquer une conversation comme lue (Admin uniquement)
 const markConversationAsRead = async (req, res) => {
   try {
-    const { conversationId } = req.params;
+    const { conversationId: groupId } = req.params;
+    const { isGuest } = req.query;
     const adminId = req.user._id;
     
     // Vérifier que l'utilisateur est admin
@@ -281,8 +285,12 @@ const markConversationAsRead = async (req, res) => {
       });
     }
     
+    const queryCondition = isGuest === 'true'
+      ? { conversationId: groupId }
+      : { userId: new mongoose.Types.ObjectId(groupId) };
+
     const result = await ChatMessage.updateMany(
-      { conversationId, messageType: 'user', status: { $ne: 'read' } },
+      { ...queryCondition, messageType: 'user', status: { $ne: 'read' } },
       { status: 'read', respondedBy: adminId }
     );
     
@@ -290,7 +298,6 @@ const markConversationAsRead = async (req, res) => {
       success: true,
       message: 'Conversation marquée comme lue',
       data: {
-        conversationId,
         updatedMessages: result.modifiedCount
       }
     });
@@ -367,12 +374,56 @@ const getChatStats = async (req, res) => {
   }
 };
 
+// Obtenir l'historique d'une conversation pour un client (authentifié ou non)
+const getClientConversationHistory = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+
+    // Pour un invité, nous nous fions à l'ID de conversation.
+    // Pour un utilisateur connecté, nous pourrions ajouter une vérification pour s'assurer
+    // qu'il est bien le propriétaire de la conversation, mais pour l'instant,
+    // l'ID de conversation unique (UUID) est considéré comme suffisamment sécurisé pour ce cas d'usage.
+    const messages = await ChatMessage.find({ conversationId }).sort({ createdAt: 'asc' });
+    
+    if (messages.length === 0) {
+      // Il est possible que la conversation existe mais n'ait pas encore de message.
+      // Nous retournons un tableau vide pour que le client puisse commencer à afficher.
+      return res.status(200).json({
+        success: true,
+        data: []
+      });
+    }
+
+    // Vérification de sécurité pour les utilisateurs connectés
+    if (req.user && messages[0].userId && messages[0].userId.toString() !== req.user._id.toString()) {
+      // Si l'utilisateur est connecté mais n'est pas le propriétaire de la conversation, on refuse l'accès.
+      // Cela empêche un utilisateur connecté de voir les conversations d'un autre.
+      if (messages[0].userInfo.isAuthenticated) {
+         return res.status(403).json({ success: false, message: 'Accès refusé.' });
+      }
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: messages
+    });
+    
+  } catch (error) {
+    console.error('Erreur lors de la récupération de l\'historique client:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération de l\'historique',
+      error: error.message
+    });
+  }
+};
+
 export {
   sendMessage,
   replyToMessage,
-  getUnreadConversations,
   getAllConversations,
   getConversationHistory,
   markConversationAsRead,
-  getChatStats
+  getChatStats,
+  getClientConversationHistory
 };

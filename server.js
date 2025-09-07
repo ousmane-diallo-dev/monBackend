@@ -74,6 +74,6 @@ app.use((req, res) => res.status(404).json({ message: 'Route introuvable' }));
 app.use(errorMiddleware);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Serveur (ESM) sur http://localhost:${PORT}`));
-//app.listen(PORT, () => console.log("✅ serveur lancé sur https://electro-pro-guinee.onrender.com"));
+//app.listen(PORT, () => console.log(`✅ Serveur (ESM) sur http://localhost:${PORT}`));
+app.listen(PORT, () => console.log("✅ serveur lancé sur https://electro-pro-guinee.onrender.com"));
 

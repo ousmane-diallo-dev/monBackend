@@ -3,11 +3,11 @@ const router = express.Router();
 import {
   sendMessage,
   replyToMessage,
-  getUnreadConversations,
   getAllConversations,
   getConversationHistory,
   markConversationAsRead,
-  getChatStats
+  getChatStats,
+  getClientConversationHistory
 } from '../controllers/chat.controller.js';
 import authenticate from '../middlewares/auth.middleware.js';
 import { isAdmin } from '../middlewares/role.middleware.js';
@@ -24,14 +24,14 @@ const optionalAuth = (req, res, next) => {
 
 router.post('/send', optionalAuth, sendMessage);
 
+// Route publique pour que le client récupère l'historique de sa conversation
+router.get('/history/:conversationId', optionalAuth, getClientConversationHistory);
+
 // Routes admin uniquement
 router.use(authenticate, isAdmin);
 
 // Répondre à un message
 router.post('/reply', replyToMessage);
-
-// Obtenir les conversations non lues
-router.get('/unread', getUnreadConversations);
 
 // Obtenir toutes les conversations
 router.get('/conversations', getAllConversations);

@@ -1,7 +1,7 @@
 import Order from '../models/order.model.js';
 import Product from '../models/product.model.js';
 import mongoose from 'mongoose';
-import { sendOrderConfirmationEmail } from '../config/email.js';
+import { sendOrderConfirmationEmail, sendOrderValidatedEmail } from '../config/email.js';
 
 export const create = async (req, res, next) => {
   try {
@@ -84,6 +84,76 @@ export const list = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+export const updateOrder = async (req, res, next) => {
+  const { id } = req.params;
+  const { adresseLivraison, statut, produits: updatedProduits } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: 'ID de commande invalide' });
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const originalOrder = await Order.findById(id).session(session);
+    if (!originalOrder) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: 'Commande non trouvée' });
+    }
+
+    // --- Gestion du stock ---
+    const originalProduitsMap = new Map(originalOrder.produits.map(p => [p.produit.toString(), p.quantite]));
+    const updatedProduitsMap = new Map(updatedProduits.map((p: any) => [p.produit.toString(), p.quantite]));
+    const stockChanges = new Map<string, number>();
+
+    // Rétablir le stock pour les produits retirés ou dont la quantité a diminué
+    originalProduitsMap.forEach((originalQuantite, produitId) => {
+      const updatedQuantite = updatedProduitsMap.get(produitId) || 0;
+      const diff = originalQuantite - updatedQuantite;
+      if (diff > 0) {
+        stockChanges.set(produitId, (stockChanges.get(produitId) || 0) + diff);
+      }
+    });
+
+    // Diminuer le stock pour les produits ajoutés ou dont la quantité a augmenté
+    updatedProduitsMap.forEach((updatedQuantite, produitId) => {
+      const originalQuantite = originalProduitsMap.get(produitId) || 0;
+      const diff = updatedQuantite - originalQuantite;
+      if (diff > 0) {
+        stockChanges.set(produitId, (stockChanges.get(produitId) || 0) - diff);
+      }
+    });
+
+    for (const [produitId, change] of stockChanges.entries()) {
+      await Product.findByIdAndUpdate(produitId, { $inc: { quantiteStock: change } }, { session, new: true });
+    }
+
+    // --- Recalcul du total et mise à jour des lignes de produits ---
+    let newMontantTotal = 0;
+    for (const item of updatedProduits) {
+      const produitDoc = await Product.findById(item.produit).session(session);
+      if (!produitDoc) throw new Error(`Produit introuvable: ${item.produit}`);
+      newMontantTotal += produitDoc.prix * item.quantite;
+      item.prixUnitaire = produitDoc.prix;
+    }
+
+    // --- Mise à jour de la commande ---
+    const updatedOrder = await Order.findByIdAndUpdate(id, {
+      adresseLivraison, statut, produits: updatedProduits, montantTotal: newMontantTotal, updatedAt: new Date()
+    }, { new: true, session }).populate('client', 'nom prenom email').populate('produits.produit', 'nom prix images');
+
+    await session.commitTransaction();
+    res.json(updatedOrder);
+  } catch (error: any) {
+    await session.abortTransaction();
+    res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
 export const getOne = async (req, res, next) => {
   try {
     const order = await Order.findById(req.params.id)
@@ -128,6 +198,16 @@ export const validateOrder = async (req, res, next) => {
       .populate('client', 'nom prenom email')
       .populate('produits.produit', 'nom prix')
       .populate('adminValidateur', 'nom prenom');
+
+    // Envoyer l'email de validation au client
+    try {
+      const clientName = `${populated.client.prenom || ''} ${populated.client.nom}`.trim();
+      await sendOrderValidatedEmail(populated, populated.client.email, clientName);
+      console.log(`Email de validation de commande envoyé à ${populated.client.email}`);
+    } catch (emailError) {
+      console.error('Erreur envoi email validation commande:', emailError);
+      // Ne pas faire échouer la requête si l'email échoue
+    }
 
     res.json(populated);
   } catch (e) { next(e); }
@@ -205,14 +285,14 @@ export const getInvoice = async (req, res, next) => {
     if (!order) return res.status(404).json({ message: 'Commande non trouvée' });
     
     // Vérifier que l'utilisateur a le droit d'accéder à cette commande
-    if (req.user.role !== 'admin' && order.client._id.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Accès refusé' });
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Accès refusé. Seuls les administrateurs peuvent voir les factures.' });
     }
     
-    // Vérifier que la commande est validée pour accéder à la facture
-    if (!order.validéeParAdmin || order.statut === 'rejetée') {
+    // Vérifier que la commande est livrée pour accéder à la facture
+    if (order.statut !== 'livrée') {
       return res.status(403).json({ 
-        message: 'La facture n\'est pas disponible. La commande doit être validée par un administrateur.' 
+        message: 'La facture n\'est disponible que pour les commandes avec le statut "livrée".'
       });
     }
     
